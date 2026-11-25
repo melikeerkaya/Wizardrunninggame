@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <title>Pembe Büyücü</title>
+  <style>
+    html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; background: #140f24; }
+    body { display: flex; align-items: center; justify-content: center; touch-action: none; overscroll-behavior: none; }
+    /* Oyun dikey ekrana göre ayarlı: pencereye 9:16 oranında sığdırılır. */
+    #unity-canvas { width: min(100vw, calc(100vh * 9 / 16)); height: min(100vh, calc(100vw * 16 / 9)); touch-action: none; display: block; outline: none; }
+    #durum { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #fff; font: 600 18px 'Segoe UI', Arial, sans-serif; text-align: center; }
+    #cubuk { width: 220px; height: 8px; margin-top: 12px; background: #3a2f5c; border-radius: 4px; overflow: hidden; }
+    #dolu { width: 0; height: 100%; background: #ff6fc4; }
+  </style>
+</head>
+<body>
+  <canvas id="unity-canvas" tabindex="-1"></canvas>
+  <div id="durum">Yükleniyor…<div id="cubuk"><div id="dolu"></div></div></div>
+  <script src="cikti.loader.js"></script>
+  <script>
+    var canvas = document.getElementById("unity-canvas");
+    var yukleme = document.getElementById("durum");
+    var fill = document.getElementById("dolu");
+
+    // Büyük dosyalar GitHub'a parça parça yüklendi; indirip yeniden birleştiriyoruz.
+    var veriParcalari = ["cikti.data.parca1", "cikti.data.parca2", "cikti.data.parca3"];
+    var kodParcalari = ["cikti.wasm.parca1", "cikti.wasm.parca2"];
+    var toplam = veriParcalari.length + kodParcalari.length;
+    var inen = 0;
+
+    function cubuk(oran) { fill.style.width = Math.round(oran * 100) + "%"; }
+
+    function birlestir(adlar) {
+      return Promise.all(adlar.map(function (ad) {
+        return fetch(ad).then(function (yanit) {
+          if (!yanit.ok) throw new Error(ad + " indirilemedi (" + yanit.status + ")");
+          return yanit.arrayBuffer();
+        }).then(function (veri) {
+          cubuk(0.8 * ++inen / toplam);
+          return veri;
+        });
+      })).then(function (parcalar) {
+        return URL.createObjectURL(new Blob(parcalar));
+      });
+    }
+
+    Promise.all([birlestir(veriParcalari), birlestir(kodParcalari)]).then(function (adresler) {
+      var config = {
+        arguments: [],
+        dataUrl: adresler[0],
+        frameworkUrl: "cikti.framework.js.unityweb",
+        codeUrl: adresler[1],
+        streamingAssetsUrl: "StreamingAssets",
+        companyName: "DefaultCompany",
+        productName: "Wizard Running Game",
+        productVersion: "0.1.0",
+        // Birleştirilen dosyaların adresi her açılışta değişir; Unity önbelleğine yazılmasın.
+        cacheControl: function () { return "no-store"; },
+        // Ekranın gerçek piksel yoğunluğunda çiz; 2'nin üstü telefonlarda oyunu boşuna yavaşlatır.
+        devicePixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+      };
+      return createUnityInstance(canvas, config, function (progress) { cubuk(0.8 + 0.2 * progress); });
+    }).then(function () {
+      yukleme.style.display = "none";
+      canvas.focus();
+    }).catch(function (hata) {
+      yukleme.textContent = "Oyun açılamadı: " + (hata && hata.message ? hata.message : hata);
+    });
+  </script>
+</body>
+</html>
